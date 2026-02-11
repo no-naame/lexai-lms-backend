@@ -4,11 +4,10 @@ import { google } from "../../lib/oauth.js";
 import { issueTokens } from "../../lib/session.js";
 import { findOrganizationByEmail } from "../../lib/domain-check.js";
 
-const IS_PRODUCTION = process.env.NODE_ENV === "production";
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
 const BACKEND_URL = process.env.BACKEND_URL || "";
 const IS_TUNNEL = BACKEND_URL.includes("ngrok") || BACKEND_URL.includes("tunnel");
-const COOKIE_SECURE = IS_PRODUCTION || IS_TUNNEL;
+const COOKIE_SECURE = BACKEND_URL.startsWith("https://");
 const COOKIE_SAME_SITE: "lax" | "none" = IS_TUNNEL ? "none" : "lax";
 
 export default async function googleRoutes(app: FastifyInstance) {
