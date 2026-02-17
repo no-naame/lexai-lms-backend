@@ -71,7 +71,7 @@ export async function issueTokens(
     httpOnly: true,
     secure: COOKIE_SECURE,
     sameSite: COOKIE_SAME_SITE,
-    path: "/auth/refresh",
+    path: "/",
     maxAge: 7 * 24 * 60 * 60, // 7 days in seconds
   });
 
@@ -101,5 +101,5 @@ export async function revokeAllUserTokens(
 
 export function clearAuthCookies(reply: FastifyReply) {
   reply.clearCookie("access_token", { path: "/" });
-  reply.clearCookie("refresh_token", { path: "/auth/refresh" });
+  reply.clearCookie("refresh_token", { path: "/" });
 }

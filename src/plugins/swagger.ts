@@ -20,15 +20,9 @@ export default fp(async (fastify: FastifyInstance) => {
       },
       servers: [
         {
-          url: "http://localhost:4000",
-          description: "Local development server",
+          url: process.env.BACKEND_URL || "http://localhost:4000",
+          description: process.env.NODE_ENV === "production" ? "Production server" : "Development server",
         },
-        ...(process.env.BACKEND_URL && process.env.BACKEND_URL !== "http://localhost:4000"
-          ? [{
-              url: process.env.BACKEND_URL,
-              description: "Tunnel server (ngrok)",
-            }]
-          : []),
       ],
       tags: [
         { name: "Health", description: "Health check endpoint" },

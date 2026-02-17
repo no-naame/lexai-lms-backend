@@ -67,7 +67,7 @@ export default async function paymentRoutes(app: FastifyInstance) {
       }
 
       const amount = parseInt(process.env.PLATFORM_PRICE || "49900", 10);
-      const receipt = `receipt_${userId}_${Date.now()}`;
+      const receipt = `rcpt_${userId.slice(-8)}_${Date.now()}`;
 
       const order = await createOrder(amount, "INR", receipt, { userId });
 

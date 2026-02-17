@@ -39,7 +39,7 @@ export default async function googleRoutes(app: FastifyInstance) {
       httpOnly: true,
       secure: COOKIE_SECURE,
       sameSite: COOKIE_SAME_SITE,
-      path: "/auth/google/callback",
+      path: "/",
       maxAge: 600, // 10 minutes
     });
 
@@ -47,7 +47,7 @@ export default async function googleRoutes(app: FastifyInstance) {
       httpOnly: true,
       secure: COOKIE_SECURE,
       sameSite: COOKIE_SAME_SITE,
-      path: "/auth/google/callback",
+      path: "/",
       maxAge: 600,
     });
 
@@ -92,8 +92,8 @@ export default async function googleRoutes(app: FastifyInstance) {
     }
 
     // Clear OAuth cookies
-    reply.clearCookie("oauth_state", { path: "/auth/google/callback" });
-    reply.clearCookie("oauth_code_verifier", { path: "/auth/google/callback" });
+    reply.clearCookie("oauth_state", { path: "/" });
+    reply.clearCookie("oauth_code_verifier", { path: "/" });
 
     try {
       // Exchange code for tokens

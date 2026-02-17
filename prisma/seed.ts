@@ -34,9 +34,9 @@ const THUMBNAILS = [
   "https://images.unsplash.com/photo-1620712943543-bcc4688e7485?w=800&q=80",
   "https://images.unsplash.com/photo-1555949963-aa79dcee981c?w=800&q=80",
   "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800&q=80",
-  "https://images.unsplash.com/photo-1515879218367-8466d910aede?w=800&q=80",
+  "https://miro.medium.com/v2/resize:fit:2000/1*S10T4ah3_JqdQ-eY6Hau0Q.png",
   "https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=800&q=80",
-  "https://images.unsplash.com/photo-1531746790095-6c10a4031e48?w=800&q=80",
+  "https://miro.medium.com/v2/resize:fit:1400/format:webp/1*Tu2zo9VcDCdCeUkqqEHx9g.jpeg",
   "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=800&q=80",
   "https://images.unsplash.com/photo-1535378917042-10a22c95931a?w=800&q=80",
 ];
@@ -139,10 +139,16 @@ async function main() {
   // ─── Step 2: Create users ──────────────────────────────────────
   console.log("👤 Creating users...");
 
-  const [adminPw, instAdminPw, studentPw] = await Promise.all([
+  const [adminPw, instAdminPw, studentPw, nehaPw, vikramPw, snehaPw, kabirPw, ishaPw, rohanPw] = await Promise.all([
     bcrypt.hash("admin123456", 12),
     bcrypt.hash("instadmin123", 12),
     bcrypt.hash("student123", 12),
+    bcrypt.hash("Neha@2025", 12),
+    bcrypt.hash("Vikram@2025", 12),
+    bcrypt.hash("Sneha@2025", 12),
+    bcrypt.hash("Kabir@2025", 12),
+    bcrypt.hash("Isha@2025", 12),
+    bcrypt.hash("Rohan@2025", 12),
   ]);
 
   const admin = await prisma.user.create({
@@ -176,7 +182,77 @@ async function main() {
     },
   });
 
+  // 3 premium students (enrolled in all courses)
+  const nehaSharma = await prisma.user.create({
+    data: {
+      name: "Neha Sharma",
+      email: "neha.sharma@gmail.com",
+      hashedPassword: nehaPw,
+      role: "STUDENT",
+      emailVerified: new Date(),
+      isPremium: true,
+    },
+  });
+
+  const vikramDesai = await prisma.user.create({
+    data: {
+      name: "Vikram Desai",
+      email: "vikram.desai@gmail.com",
+      hashedPassword: vikramPw,
+      role: "STUDENT",
+      emailVerified: new Date(),
+      isPremium: true,
+    },
+  });
+
+  const snehaRajan = await prisma.user.create({
+    data: {
+      name: "Sneha Rajan",
+      email: "sneha.rajan@gmail.com",
+      hashedPassword: snehaPw,
+      role: "STUDENT",
+      emailVerified: new Date(),
+      isPremium: true,
+    },
+  });
+
+  // 3 free users (no course access)
+  await prisma.user.create({
+    data: {
+      name: "Kabir Malhotra",
+      email: "kabir.malhotra@gmail.com",
+      hashedPassword: kabirPw,
+      role: "STUDENT",
+      emailVerified: new Date(),
+      isPremium: false,
+    },
+  });
+
+  await prisma.user.create({
+    data: {
+      name: "Isha Verma",
+      email: "isha.verma@gmail.com",
+      hashedPassword: ishaPw,
+      role: "STUDENT",
+      emailVerified: new Date(),
+      isPremium: false,
+    },
+  });
+
+  await prisma.user.create({
+    data: {
+      name: "Rohan Pillai",
+      email: "rohan.pillai@gmail.com",
+      hashedPassword: rohanPw,
+      role: "STUDENT",
+      emailVerified: new Date(),
+      isPremium: false,
+    },
+  });
+
   console.log(`  Created: ${admin.email}, ${instAdmin.email}, ${student.email}`);
+  console.log(`  Created students: ${nehaSharma.email}, ${vikramDesai.email}, ${snehaRajan.email}`);
+  console.log(`  Created free users: kabir.malhotra@gmail.com, isha.verma@gmail.com, rohan.pillai@gmail.com`);
 
   // ─── Step 3: Organization + Batch + Student Records ────────────
   console.log("🏛️  Creating organization, batch, student records...");
@@ -1311,18 +1387,20 @@ async function main() {
     });
   }
 
-  // B2C student: enrolled in all 11 courses
-  for (const course of courses) {
-    await prisma.courseEnrollment.create({
-      data: {
-        userId: student.id,
-        courseId: course.id,
-        accessSource: "INDIVIDUAL",
-      },
-    });
+  // B2C students: enrolled in all 11 courses
+  for (const u of [student, nehaSharma, vikramDesai, snehaRajan]) {
+    for (const course of courses) {
+      await prisma.courseEnrollment.create({
+        data: {
+          userId: u.id,
+          courseId: course.id,
+          accessSource: "INDIVIDUAL",
+        },
+      });
+    }
   }
 
-  console.log(`  Org access: ${courses.length} courses | Student enrollments: ${courses.length} courses`);
+  console.log(`  Org access: ${courses.length} courses | Student enrollments: 4 users x ${courses.length} courses`);
 
   // ─── Done ──────────────────────────────────────────────────────
   console.log("\n🎉 Seed complete!");
@@ -1330,6 +1408,14 @@ async function main() {
   console.log("  Platform Admin:     admin@lexai.com / admin123456");
   console.log("  Institution Admin:  admin@demo-university.edu / instadmin123");
   console.log("  Premium Student:    student@gmail.com / student123");
+  console.log("\nStudents (premium, all courses):");
+  console.log("  Neha Sharma:        neha.sharma@gmail.com / Neha@2025");
+  console.log("  Vikram Desai:       vikram.desai@gmail.com / Vikram@2025");
+  console.log("  Sneha Rajan:        sneha.rajan@gmail.com / Sneha@2025");
+  console.log("\nFree users (no courses):");
+  console.log("  Kabir Malhotra:     kabir.malhotra@gmail.com / Kabir@2025");
+  console.log("  Isha Verma:         isha.verma@gmail.com / Isha@2025");
+  console.log("  Rohan Pillai:       rohan.pillai@gmail.com / Rohan@2025");
   console.log("\nInstitutional students (pre-registered):");
   console.log("  priya.sharma@demo-university.edu / STU-2025-001");
   console.log("  rohan.iyer@demo-university.edu / STU-2025-002");
