@@ -6,9 +6,10 @@ import type { JWTPayload, MembershipInfo } from "../types/index.js";
 const ACCESS_TOKEN_EXPIRY = "15m";
 const REFRESH_TOKEN_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const BACKEND_URL = process.env.BACKEND_URL || "";
-const IS_TUNNEL = BACKEND_URL.includes("ngrok") || BACKEND_URL.includes("tunnel");
+const IS_TUNNEL = BACKEND_URL.includes("ngrok") || BACKEND_URL.includes("tunnel") || BACKEND_URL.includes("trycloudflare");
 const COOKIE_SECURE = BACKEND_URL.startsWith("https://");
 const COOKIE_SAME_SITE: "lax" | "none" = IS_TUNNEL ? "none" : "lax";
+const COOKIE_DOMAIN = process.env.COOKIE_DOMAIN || undefined;
 
 export async function buildMemberships(
   prisma: PrismaClient,
@@ -65,6 +66,7 @@ export async function issueTokens(
     sameSite: COOKIE_SAME_SITE,
     path: "/",
     maxAge: 15 * 60, // 15 minutes in seconds
+    ...(COOKIE_DOMAIN && { domain: COOKIE_DOMAIN }),
   });
 
   reply.setCookie("refresh_token", rawRefreshToken, {
@@ -73,6 +75,7 @@ export async function issueTokens(
     sameSite: COOKIE_SAME_SITE,
     path: "/",
     maxAge: 7 * 24 * 60 * 60, // 7 days in seconds
+    ...(COOKIE_DOMAIN && { domain: COOKIE_DOMAIN }),
   });
 
   return { accessToken, memberships };
@@ -100,6 +103,6 @@ export async function revokeAllUserTokens(
 }
 
 export function clearAuthCookies(reply: FastifyReply) {
-  reply.clearCookie("access_token", { path: "/" });
-  reply.clearCookie("refresh_token", { path: "/" });
+  reply.clearCookie("access_token", { path: "/", ...(COOKIE_DOMAIN && { domain: COOKIE_DOMAIN }) });
+  reply.clearCookie("refresh_token", { path: "/", ...(COOKIE_DOMAIN && { domain: COOKIE_DOMAIN }) });
 }

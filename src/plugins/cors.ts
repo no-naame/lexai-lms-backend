@@ -4,7 +4,7 @@ import type { FastifyInstance } from "fastify";
 
 export default fp(async (fastify: FastifyInstance) => {
   const backendUrl = process.env.BACKEND_URL || "";
-  const isTunnel = backendUrl.includes("ngrok") || backendUrl.includes("tunnel");
+  const isTunnel = backendUrl.includes("ngrok") || backendUrl.includes("tunnel") || backendUrl.includes("trycloudflare");
 
   fastify.register(fastifyCors, {
     origin: (origin, cb) => {

@@ -6,9 +6,10 @@ import { findOrganizationByEmail } from "../../lib/domain-check.js";
 
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
 const BACKEND_URL = process.env.BACKEND_URL || "";
-const IS_TUNNEL = BACKEND_URL.includes("ngrok") || BACKEND_URL.includes("tunnel");
+const IS_TUNNEL = BACKEND_URL.includes("ngrok") || BACKEND_URL.includes("tunnel") || BACKEND_URL.includes("trycloudflare");
 const COOKIE_SECURE = BACKEND_URL.startsWith("https://");
 const COOKIE_SAME_SITE: "lax" | "none" = IS_TUNNEL ? "none" : "lax";
+const COOKIE_DOMAIN = process.env.COOKIE_DOMAIN || undefined;
 
 export default async function googleRoutes(app: FastifyInstance) {
   // GET /auth/google/login - Redirect to Google OAuth
@@ -41,6 +42,7 @@ export default async function googleRoutes(app: FastifyInstance) {
       sameSite: COOKIE_SAME_SITE,
       path: "/",
       maxAge: 600, // 10 minutes
+      ...(COOKIE_DOMAIN && { domain: COOKIE_DOMAIN }),
     });
 
     reply.setCookie("oauth_code_verifier", codeVerifier, {
@@ -49,6 +51,7 @@ export default async function googleRoutes(app: FastifyInstance) {
       sameSite: COOKIE_SAME_SITE,
       path: "/",
       maxAge: 600,
+      ...(COOKIE_DOMAIN && { domain: COOKIE_DOMAIN }),
     });
 
     return reply.redirect(url.toString());
@@ -92,8 +95,8 @@ export default async function googleRoutes(app: FastifyInstance) {
     }
 
     // Clear OAuth cookies
-    reply.clearCookie("oauth_state", { path: "/" });
-    reply.clearCookie("oauth_code_verifier", { path: "/" });
+    reply.clearCookie("oauth_state", { path: "/", ...(COOKIE_DOMAIN && { domain: COOKIE_DOMAIN }) });
+    reply.clearCookie("oauth_code_verifier", { path: "/", ...(COOKIE_DOMAIN && { domain: COOKIE_DOMAIN }) });
 
     try {
       // Exchange code for tokens
