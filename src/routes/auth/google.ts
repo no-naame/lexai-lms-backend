@@ -75,7 +75,7 @@ export default async function googleRoutes(app: FastifyInstance) {
         },
         response: {
           302: {
-            description: "Redirects to frontend (/ on success, /sign-in?error=oauth_failed on error)",
+            description: "Redirects to frontend (/ on success, /login?error=oauth_failed on error)",
           },
         },
       },
@@ -91,7 +91,7 @@ export default async function googleRoutes(app: FastifyInstance) {
 
     // Validate state and code
     if (!code || !state || !storedState || state !== storedState || !codeVerifier) {
-      return reply.redirect(`${FRONTEND_URL}/sign-in?error=oauth_failed`);
+      return reply.redirect(`${FRONTEND_URL}/login?error=oauth_failed`);
     }
 
     // Clear OAuth cookies
@@ -112,7 +112,7 @@ export default async function googleRoutes(app: FastifyInstance) {
       );
 
       if (!userResponse.ok) {
-        return reply.redirect(`${FRONTEND_URL}/sign-in?error=oauth_failed`);
+        return reply.redirect(`${FRONTEND_URL}/login?error=oauth_failed`);
       }
 
       const googleUser = (await userResponse.json()) as {
@@ -209,7 +209,7 @@ export default async function googleRoutes(app: FastifyInstance) {
       return reply.redirect(`${FRONTEND_URL}/`);
     } catch (error) {
       app.log.error(error, "Google OAuth callback error");
-      return reply.redirect(`${FRONTEND_URL}/sign-in?error=oauth_failed`);
+      return reply.redirect(`${FRONTEND_URL}/login?error=oauth_failed`);
     }
   });
 }
