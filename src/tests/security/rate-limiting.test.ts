@@ -14,40 +14,45 @@ describe("RATE LIMITING", () => {
 
   // ─── ENDPOINT-SPECIFIC LIMITS ────────────────────────────────
   // Each test gets a fresh app instance so rate limit counters start at zero.
+  // Login (300/min) and register (100/min) tests use payloads that bypass
+  // bcrypt to keep sequential requests fast enough to fit within the
+  // 1-minute rate-limit window.
 
   describe("ENDPOINT-SPECIFIC LIMITS", () => {
-    it("POST /auth/login — 11th request within 1 minute → 429", async () => {
+    it("POST /auth/login — 301st request within 1 minute → 429", { timeout: 60_000 }, async () => {
       const app = await buildTestApp();
       try {
-        await createUser({ email: "ratelimit@example.com" });
-
-        let lastRes: any;
-        for (let i = 0; i < 11; i++) {
-          lastRes = await app.inject({
+        // Use nonexistent email to skip bcrypt.compare.
+        // Send concurrently to avoid Neon DB round-trip latency stacking.
+        const requests = Array.from({ length: 301 }, () =>
+          app.inject({
             method: "POST",
             url: "/auth/login",
-            payload: { email: "ratelimit@example.com", password: "wrongpassword" },
-          });
-        }
+            payload: { email: "nonexistent@example.com", password: "irrelevant" },
+          })
+        );
+        const responses = await Promise.all(requests);
 
-        expect(lastRes.statusCode).toBe(429);
+        expect(responses.some((r) => r.statusCode === 429)).toBe(true);
       } finally {
         await app.close();
       }
     });
 
-    it("POST /auth/register — 6th request within 1 minute → 429", async () => {
+    it("POST /auth/register — 101st request within 1 minute → 429", { timeout: 60_000 }, async () => {
       const app = await buildTestApp();
       try {
+        // Use short password to fail at Zod validation before bcrypt.hash.
+        // The rate limiter still counts each request.
         let lastRes: any;
-        for (let i = 0; i < 6; i++) {
+        for (let i = 0; i < 101; i++) {
           lastRes = await app.inject({
             method: "POST",
             url: "/auth/register",
             payload: {
               name: `User ${i}`,
               email: `register${i}@example.com`,
-              password: "password123",
+              password: "short",
             },
           });
         }
@@ -58,11 +63,11 @@ describe("RATE LIMITING", () => {
       }
     });
 
-    it("POST /auth/forgot-password — 4th request within 1 minute → 429", async () => {
+    it("POST /auth/forgot-password — 31st request within 1 minute → 429", async () => {
       const app = await buildTestApp();
       try {
         let lastRes: any;
-        for (let i = 0; i < 4; i++) {
+        for (let i = 0; i < 31; i++) {
           lastRes = await app.inject({
             method: "POST",
             url: "/auth/forgot-password",
@@ -79,7 +84,7 @@ describe("RATE LIMITING", () => {
     it("429 response includes Retry-After header", async () => {
       const app = await buildTestApp();
       try {
-        for (let i = 0; i < 4; i++) {
+        for (let i = 0; i < 30; i++) {
           await app.inject({
             method: "POST",
             url: "/auth/forgot-password",
@@ -90,7 +95,7 @@ describe("RATE LIMITING", () => {
         const res = await app.inject({
           method: "POST",
           url: "/auth/forgot-password",
-          payload: { email: "retryafter5@example.com" },
+          payload: { email: "retryafter31@example.com" },
         });
 
         if (res.statusCode === 429) {
@@ -111,8 +116,8 @@ describe("RATE LIMITING", () => {
         await createUser({ email: "authed@example.com" });
         const { cookies } = await loginAs(app, "authed@example.com");
 
-        // Exhaust forgot-password rate limit (3/min)
-        for (let i = 0; i < 3; i++) {
+        // Exhaust forgot-password rate limit (30/min)
+        for (let i = 0; i < 30; i++) {
           await app.inject({
             method: "POST",
             url: "/auth/forgot-password",
@@ -120,7 +125,7 @@ describe("RATE LIMITING", () => {
           });
         }
 
-        // 4th request with valid auth should still be rate limited
+        // 31st request with valid auth should still be rate limited
         const res = await app.inject({
           method: "POST",
           url: "/auth/forgot-password",
@@ -136,26 +141,27 @@ describe("RATE LIMITING", () => {
       }
     });
 
-    it("rate limit still applies with valid JWT", async () => {
+    it("rate limit still applies with valid JWT", { timeout: 60_000 }, async () => {
       const app = await buildTestApp();
       try {
         await createUser({ email: "jwtlimit@example.com" });
         const { cookies } = await loginAs(app, "jwtlimit@example.com");
 
-        // Use login endpoint which has a 10/min limit
-        let lastRes: any;
-        for (let i = 0; i < 11; i++) {
-          lastRes = await app.inject({
+        // Use login endpoint which has a 300/min limit.
+        // Nonexistent email avoids bcrypt, concurrent avoids latency stacking.
+        const requests = Array.from({ length: 301 }, () =>
+          app.inject({
             method: "POST",
             url: "/auth/login",
-            payload: { email: "jwtlimit@example.com", password: "wrongpw" },
+            payload: { email: "nonexistent@example.com", password: "irrelevant" },
             headers: {
               cookie: `access_token=${cookies.access_token}`,
             },
-          });
-        }
+          })
+        );
+        const responses = await Promise.all(requests);
 
-        expect(lastRes.statusCode).toBe(429);
+        expect(responses.some((r) => r.statusCode === 429)).toBe(true);
       } finally {
         await app.close();
       }

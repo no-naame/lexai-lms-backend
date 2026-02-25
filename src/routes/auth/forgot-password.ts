@@ -8,7 +8,7 @@ export default async function forgotPasswordRoutes(app: FastifyInstance) {
     "/forgot-password",
     {
       config: {
-        rateLimit: { max: 3, timeWindow: "1 minute" },
+        rateLimit: { max: 30, timeWindow: "1 minute" },
       },
       schema: {
         tags: ["Auth"],

@@ -9,7 +9,7 @@ export default async function registerRoutes(app: FastifyInstance) {
     "/register",
     {
       config: {
-        rateLimit: { max: 5, timeWindow: "1 minute" },
+        rateLimit: { max: 100, timeWindow: "1 minute" },
       },
       schema: {
         tags: ["Auth"],

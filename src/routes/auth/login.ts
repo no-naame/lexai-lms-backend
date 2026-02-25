@@ -9,7 +9,7 @@ export default async function loginRoutes(app: FastifyInstance) {
     "/login",
     {
       config: {
-        rateLimit: { max: 10, timeWindow: "1 minute" },
+        rateLimit: { max: 300, timeWindow: "1 minute" },
       },
       schema: {
         tags: ["Auth"],

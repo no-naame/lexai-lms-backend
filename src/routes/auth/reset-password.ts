@@ -9,7 +9,7 @@ export default async function resetPasswordRoutes(app: FastifyInstance) {
     "/reset-password",
     {
       config: {
-        rateLimit: { max: 5, timeWindow: "1 minute" },
+        rateLimit: { max: 30, timeWindow: "1 minute" },
       },
       schema: {
         tags: ["Auth"],
