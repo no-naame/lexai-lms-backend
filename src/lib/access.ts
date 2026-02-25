@@ -11,38 +11,40 @@ export async function canAccessCourse(
   userId: string,
   courseId: string
 ): Promise<boolean> {
-  // Check direct enrollment
-  const directEnrollment = await prisma.courseEnrollment.findUnique({
-    where: {
-      userId_courseId: { userId, courseId },
-    },
-  });
-  if (directEnrollment) return true;
+  // Run both checks in parallel — either one grants access
+  const [directEnrollment, membership] = await Promise.all([
+    prisma.courseEnrollment.findUnique({
+      where: {
+        userId_courseId: { userId, courseId },
+      },
+    }),
+    prisma.organizationMember.findFirst({
+      where: {
+        userId,
+        isActive: true,
+        isVerified: true,
+        organization: { isActive: true },
+      },
+    }),
+  ]);
 
-  // Subscription model: any verified org membership = access to ALL courses
-  const membership = await prisma.organizationMember.findFirst({
-    where: {
-      userId,
-      isActive: true,
-      isVerified: true,
-      organization: { isActive: true },
-    },
-  });
-  if (membership) return true;
-
-  return false;
+  return !!(directEnrollment || membership);
 }
 
 /**
  * Check if a user can access a specific lesson.
  * Free lessons are accessible to everyone. Paid lessons require subscription/enrollment.
+ *
+ * Accepts an optional pre-fetched lesson to avoid a duplicate DB round trip
+ * when the caller has already loaded the lesson with module.course included.
  */
 export async function canAccessLesson(
   prisma: PrismaClient,
   userId: string | undefined,
-  lessonId: string
-): Promise<{ accessible: boolean; reason?: string; lesson?: any }> {
-  const lesson = await prisma.lesson.findUnique({
+  lessonId: string,
+  prefetchedLesson?: { isFree: boolean; module: { course: { id: string; isPublished: boolean } } }
+): Promise<{ accessible: boolean; reason?: string }> {
+  const lesson = prefetchedLesson ?? await prisma.lesson.findUnique({
     where: { id: lessonId },
     include: {
       module: {
@@ -59,21 +61,21 @@ export async function canAccessLesson(
 
   // Free lessons are accessible to everyone
   if (lesson.isFree) {
-    return { accessible: true, lesson };
+    return { accessible: true };
   }
 
   // Paid lesson requires authentication
   if (!userId) {
-    return { accessible: false, reason: "unauthenticated", lesson };
+    return { accessible: false, reason: "unauthenticated" };
   }
 
   // Check subscription/enrollment
   const hasAccess = await canAccessCourse(prisma, userId, lesson.module.course.id);
   if (!hasAccess) {
-    return { accessible: false, reason: "no_subscription", lesson };
+    return { accessible: false, reason: "no_subscription" };
   }
 
-  return { accessible: true, lesson };
+  return { accessible: true };
 }
 
 /**

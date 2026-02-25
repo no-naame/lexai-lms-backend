@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { Prisma } from "@prisma/client";
 import { authenticate } from "../../hooks/auth.js";
 import { canAccessCourse } from "../../lib/access.js";
 import type { JWTPayload } from "../../types/index.js";
@@ -41,24 +42,27 @@ export default async function coursesRoutes(app: FastifyInstance) {
         _count: {
           select: { modules: true },
         },
-        modules: {
-          select: {
-            _count: { select: { lessons: true } },
-            lessons: {
-              select: { duration: true },
-            },
-          },
-        },
       },
       orderBy: { createdAt: "desc" },
     });
 
+    // Single SQL aggregation for lesson counts and total duration — avoids loading every lesson row
+    const courseIds = courses.map((c) => c.id);
+    const stats = courseIds.length > 0
+      ? await app.prisma.$queryRaw<{ courseId: string; lessonCount: bigint; totalDuration: bigint }[]>`
+          SELECT m."courseId" AS "courseId",
+                 COUNT(l.id)::bigint AS "lessonCount",
+                 COALESCE(SUM(l.duration), 0)::bigint AS "totalDuration"
+          FROM modules m
+          JOIN lessons l ON l."moduleId" = m.id
+          WHERE m."courseId" IN (${Prisma.join(courseIds)})
+          GROUP BY m."courseId"
+        `
+      : [];
+    const statsMap = new Map(stats.map((s) => [s.courseId, s]));
+
     const result = courses.map((c) => {
-      const totalLessons = c.modules.reduce((sum, m) => sum + m._count.lessons, 0);
-      const totalDurationSeconds = c.modules.reduce(
-        (sum, m) => sum + m.lessons.reduce((s, l) => s + l.duration, 0),
-        0
-      );
+      const s = statsMap.get(c.id);
       return {
         id: c.slug,
         title: c.title,
@@ -74,8 +78,8 @@ export default async function coursesRoutes(app: FastifyInstance) {
         rating: c.rating,
         reviewsCount: c.reviewsCount,
         totalModules: c._count.modules,
-        totalLessons,
-        totalDurationMinutes: Math.round(totalDurationSeconds / 60),
+        totalLessons: Number(s?.lessonCount ?? 0),
+        totalDurationMinutes: Math.round(Number(s?.totalDuration ?? 0) / 60),
         isFeatured: c.isFeatured,
       };
     });
@@ -164,26 +168,29 @@ export default async function coursesRoutes(app: FastifyInstance) {
           _count: {
             select: { modules: true },
           },
-          modules: {
-            select: {
-              _count: { select: { lessons: true } },
-              lessons: {
-                select: { duration: true },
-              },
-            },
-          },
         },
         orderBy: { createdAt: "desc" },
       }),
       app.prisma.course.count({ where }),
     ]);
 
+    // Single SQL aggregation for lesson counts and total duration
+    const courseIds = courses.map((c) => c.id);
+    const stats = courseIds.length > 0
+      ? await app.prisma.$queryRaw<{ courseId: string; lessonCount: bigint; totalDuration: bigint }[]>`
+          SELECT m."courseId" AS "courseId",
+                 COUNT(l.id)::bigint AS "lessonCount",
+                 COALESCE(SUM(l.duration), 0)::bigint AS "totalDuration"
+          FROM modules m
+          JOIN lessons l ON l."moduleId" = m.id
+          WHERE m."courseId" IN (${Prisma.join(courseIds)})
+          GROUP BY m."courseId"
+        `
+      : [];
+    const statsMap = new Map(stats.map((s) => [s.courseId, s]));
+
     const result = courses.map((c) => {
-      const totalLessons = c.modules.reduce((sum, m) => sum + m._count.lessons, 0);
-      const totalDurationSeconds = c.modules.reduce(
-        (sum, m) => sum + m.lessons.reduce((s, l) => s + l.duration, 0),
-        0
-      );
+      const s = statsMap.get(c.id);
       return {
         id: c.slug,
         title: c.title,
@@ -199,8 +206,8 @@ export default async function coursesRoutes(app: FastifyInstance) {
         rating: c.rating,
         reviewsCount: c.reviewsCount,
         totalModules: c._count.modules,
-        totalLessons,
-        totalDurationMinutes: Math.round(totalDurationSeconds / 60),
+        totalLessons: Number(s?.lessonCount ?? 0),
+        totalDurationMinutes: Math.round(Number(s?.totalDuration ?? 0) / 60),
         isFeatured: c.isFeatured,
       };
     });

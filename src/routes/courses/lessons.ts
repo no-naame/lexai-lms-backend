@@ -76,7 +76,7 @@ export default async function lessonRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: "Lesson not found" });
       }
 
-      // Access check
+      // Access check — pass pre-fetched lesson to avoid duplicate query
       if (!lesson.isFree) {
         if (!userId) {
           return reply.status(401).send({ error: "Authentication required" });
@@ -85,7 +85,8 @@ export default async function lessonRoutes(app: FastifyInstance) {
         const { accessible, reason } = await canAccessLesson(
           app.prisma,
           userId,
-          lessonId
+          lessonId,
+          lesson
         );
 
         if (!accessible) {
@@ -96,45 +97,47 @@ export default async function lessonRoutes(app: FastifyInstance) {
         }
       }
 
-      // Get curriculum data: all modules and lessons for this course
-      const courseModules = await app.prisma.module.findMany({
-        where: { courseId: lesson.module.course.id },
-        orderBy: { order: "asc" },
-        select: {
-          id: true,
-          title: true,
-          order: true,
-          lessons: {
-            orderBy: { order: "asc" },
-            select: {
-              id: true,
-              title: true,
-              type: true,
-              isFree: true,
-              isPreview: true,
-              duration: true,
+      // Run curriculum, progress, and current lesson progress queries in parallel
+      const courseId = lesson.module.course.id;
+
+      const [courseModules, progressRecords] = await Promise.all([
+        // Curriculum: all modules and lessons for this course
+        app.prisma.module.findMany({
+          where: { courseId },
+          orderBy: { order: "asc" },
+          select: {
+            id: true,
+            title: true,
+            order: true,
+            lessons: {
+              orderBy: { order: "asc" },
+              select: {
+                id: true,
+                title: true,
+                type: true,
+                isFree: true,
+                isPreview: true,
+                duration: true,
+              },
             },
           },
-        },
-      });
+        }),
+        // Progress for all lessons in this course (includes current lesson)
+        userId
+          ? app.prisma.userLessonProgress.findMany({
+              where: {
+                userId,
+                lesson: { module: { courseId } },
+              },
+              select: { lessonId: true, completed: true, watchedSeconds: true },
+            })
+          : Promise.resolve([]),
+      ]);
 
-      // Get progress for all lessons in this course if authenticated
-      let progressMap = new Map<string, { completed: boolean }>();
-      if (userId) {
-        const allLessonIds = courseModules.flatMap((m) =>
-          m.lessons.map((l) => l.id)
-        );
-        const progressRecords = await app.prisma.userLessonProgress.findMany({
-          where: {
-            userId,
-            lessonId: { in: allLessonIds },
-          },
-          select: { lessonId: true, completed: true },
-        });
-        for (const p of progressRecords) {
-          progressMap.set(p.lessonId, { completed: p.completed });
-        }
-      }
+      // Build progress map (serves both curriculum and current lesson progress)
+      const progressMap = new Map(
+        progressRecords.map((p) => [p.lessonId, p])
+      );
 
       // Build curriculum (replaces sidebar)
       const curriculum = courseModules.map((m) => ({
@@ -155,9 +158,7 @@ export default async function lessonRoutes(app: FastifyInstance) {
       const allLessonsOrdered = courseModules.flatMap((m) =>
         m.lessons.map((l) => ({ id: l.id, title: l.title, moduleId: m.id }))
       );
-      const currentIndex = allLessonsOrdered.indexOf(
-        allLessonsOrdered.find((l) => l.id === lessonId)!
-      );
+      const currentIndex = allLessonsOrdered.findIndex((l) => l.id === lessonId);
 
       // Find current module
       const currentModuleData = courseModules.find((m) => m.id === lesson.module.id);
@@ -184,16 +185,13 @@ export default async function lessonRoutes(app: FastifyInstance) {
           : null,
       };
 
-      // Get current user's progress for this lesson
+      // Get current user's progress from the already-fetched map
       let progress = null;
       if (userId) {
-        const userProgress = await app.prisma.userLessonProgress.findUnique({
-          where: {
-            userId_lessonId: { userId, lessonId },
-          },
-          select: { completed: true, watchedSeconds: true },
-        });
-        progress = userProgress ?? { completed: false, watchedSeconds: 0 };
+        const p = progressMap.get(lessonId);
+        progress = p
+          ? { completed: p.completed, watchedSeconds: p.watchedSeconds }
+          : { completed: false, watchedSeconds: 0 };
       }
 
       return reply.send({
@@ -298,12 +296,13 @@ export default async function lessonRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: "Lesson not found" });
       }
 
-      // Access check — must have access to track progress
+      // Access check — pass pre-fetched lesson to avoid duplicate query
       if (!lesson.isFree) {
         const { accessible, reason } = await canAccessLesson(
           app.prisma,
           userId,
-          lessonId
+          lessonId,
+          lesson
         );
         if (!accessible) {
           if (reason === "no_subscription") {
